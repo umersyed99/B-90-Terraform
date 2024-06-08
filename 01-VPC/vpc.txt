@@ -1,0 +1,172 @@
+##################################################################
+##                       VPC Creation                           ##
+##################################################################
+resource "aws_vpc" "ofl-ecom-dev-vpc" {
+  cidr_block           = var.ofl_cidr-range
+  instance_tenancy     = "default"
+  enable_dns_hostnames = true
+  tags = {
+    Name = title("ofl-dev-vpc")
+  }
+}
+
+##################################################################
+##                 Webserver Subnet - 1                         ##
+##################################################################
+
+resource "aws_subnet" "ofl-ecom-web-sn-1" {
+  vpc_id                  = aws_vpc.ofl-ecom-dev-vpc.id
+  cidr_block              = var.ofl_subnet_cidr[0]
+  availability_zone       = var.ofl_az[0]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = title("ofl-Ecom-Public-subnet-1")
+  }
+  depends_on = [aws_vpc.ofl-ecom-dev-vpc]
+}
+
+
+##################################################################
+##                 Webserver Subnet - 2                        ##
+##################################################################
+
+resource "aws_subnet" "ofl-ecom-web-sn-2" {
+  vpc_id                  = aws_vpc.ofl-ecom-dev-vpc.id
+  cidr_block              = var.ofl_subnet_cidr[1]
+  availability_zone       = var.ofl_az[1]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = title("ofl-Ecom-Public-subnet-2")
+  }
+  depends_on = [aws_vpc.ofl-ecom-dev-vpc]
+}
+
+
+##################################################################
+##                       IGW Creation                           ##
+##################################################################
+
+resource "aws_internet_gateway" "ofl-ecom-igw" {
+  vpc_id = aws_vpc.ofl-ecom-dev-vpc.id
+  tags = {
+    Name = title("ofl-ecom-igw")
+  }
+}
+
+
+##################################################################
+##                       Public RT                              ##
+##################################################################
+
+resource "aws_route_table" "ofl-ecom-prt" {
+  vpc_id = aws_vpc.ofl-ecom-dev-vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.ofl-ecom-igw.id
+  }
+  tags = {
+    Name = title("ofl-Ecom-Public-rt")
+  }
+
+}
+
+
+resource "aws_route_table_association" "ecom-accoc-web-subnet-1" {
+  subnet_id      = aws_subnet.ofl-ecom-web-sn-1.id
+  route_table_id = aws_route_table.ofl-ecom-prt.id
+}
+
+resource "aws_route_table_association" "ecom-accoc-web-subnet-2" {
+  subnet_id      = aws_subnet.ofl-ecom-web-sn-2.id
+  route_table_id = aws_route_table.ofl-ecom-prt.id
+}
+
+
+
+##################################################################
+##                 Private Subnet - 1                         ##
+##################################################################
+
+resource "aws_subnet" "ofl-ecom-web-pivate-sn-1" {
+  vpc_id                  = aws_vpc.ofl-ecom-dev-vpc.id
+  cidr_block              = var.ofl_subnet_private_cidr[0]
+  availability_zone       = var.ofl_az[0]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = title("ofl-Ecom-Private-subnet-1")
+  }
+  depends_on = [aws_vpc.ofl-ecom-dev-vpc]
+}
+
+##################################################################
+##                 Private Subnet - 2                        ##
+##################################################################
+
+resource "aws_subnet" "ofl-ecom-web-pivate-sn-12" {
+  vpc_id                  = aws_vpc.ofl-ecom-dev-vpc.id
+  cidr_block              = var.ofl_subnet_private_cidr[1]
+  availability_zone       = var.ofl_az[2]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = title("ofl-Ecom-Private-subnet-2")
+  }
+  depends_on = [aws_vpc.ofl-ecom-dev-vpc]
+}
+
+
+##################################################################
+##                         EIP Creation                         ##
+##################################################################
+
+resource "aws_eip" "ecom-eip" {
+  domain = "vpc"
+  tags = {
+    Name = "ofl-ecom-VPC-Eip"
+  }
+}
+
+
+##################################################################
+##                    NAT Gateway Creation                      ##
+##################################################################
+
+resource "aws_nat_gateway" "ecom-nat" {
+  allocation_id = aws_eip.ecom-eip.id
+  subnet_id     = aws_subnet.ofl-ecom-web-sn-1.id
+  tags = {
+    Name = "ofl-Ecom-VPC-NG"
+  }
+}
+
+
+##################################################################
+##                 Private Route Table                           ##
+##################################################################
+
+resource "aws_route_table" "ecom-pvrt" {
+  vpc_id = aws_vpc.ofl-ecom-dev-vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.ecom-nat.id
+  }
+  tags = {
+    Name = "ecom-Private-rt"
+  }
+}
+
+
+
+resource "aws_route_table_association" "ecom-accoc-private-subnet-1" {
+  subnet_id      = aws_subnet.ofl-ecom-web-pivate-sn-1.id
+  route_table_id = aws_route_table.ecom-pvrt.id
+}
+
+
+resource "aws_route_table_association" "ecom-accoc-private-subnet-2" {
+  subnet_id      = aws_subnet.ofl-ecom-web-pivate-sn-12.id
+  route_table_id = aws_route_table.ecom-pvrt.id
+}
